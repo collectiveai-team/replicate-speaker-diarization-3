@@ -10,7 +10,7 @@ from pyannote.audio.pipelines import SpeakerDiarization
 
 from lib.diarization import DiarizationPostProcessor
 from lib.audio import AudioPreProcessor
-
+import urllib.request
 
 class Predictor(BasePredictor):
     def setup(self):
@@ -56,9 +56,18 @@ class Predictor(BasePredictor):
     def predict(
         self,
         audio: Path = Input(description="Audio file",
-                            default="https://pyannote-speaker-diarization.s3.eu-west-2.amazonaws.com/lex-levin-4min.mp3"),
+                            default=None),
+        audio_url: str = Input(description="Audio URL", default=None),
     ) -> Path:
         """Run a single prediction on the model"""
+
+
+        if audio_url is not None:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                filename = temp_file.name
+                urllib.request.urlretrieve(audio_url, filename)
+            audio = filename
+            
 
         self.audio_pre.process(audio)
 

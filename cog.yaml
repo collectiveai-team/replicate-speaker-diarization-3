@@ -17,6 +17,6 @@ build:
   run:
     - 'wget -O - https://pyannote-speaker-diarization.s3.eu-west-2.amazonaws.com/data-2023-03-25-02.tar.gz | tar xz -C /'
 
-image: 'r8.im/meronym/speaker-diarization'
+image: 'r8.im/collectiveai-team/speaker-diarization'
 
 predict: 'predict.py:Predictor'
