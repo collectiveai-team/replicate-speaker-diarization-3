@@ -8,7 +8,7 @@ class SpeakerLabelGenerator:
     def __init__(self):
         self.speakers = {}
         self.labels = []
-        self.next_speaker = ord('A')
+        self.next_speaker = ord("A")
         self.count = 0
 
     def get(self, name):
@@ -30,14 +30,15 @@ class DiarizationPostProcessor:
         self.labels = None
 
     def process(self, diarization, embeddings):
-        print('post-processing diarization...')
+        print("post-processing diarization...")
         # create a new label generator
         self.labels = SpeakerLabelGenerator()
 
         # process the diarization
-        clean_segments = self.clean_segments(diarization)
-        merged_segments = self.merge_segments(clean_segments)
-        emb_segments = self.segment_embeddings(merged_segments, embeddings)
+        # clean_segments = self.clean_segments(diarization)
+        # merged_segments = self.merge_segments(clean_segments)
+        segments = self.format(diarization)
+        emb_segments = self.segment_embeddings(segments, embeddings)
 
         # create the speaker embeddings
         speaker_embeddings = self.create_speaker_embeddings(emb_segments)
@@ -69,6 +70,19 @@ class DiarizationPostProcessor:
             },
         }
 
+    def format(self, diarization):
+        segments = []
+        for segment, _, speaker in diarization.itertracks(yield_label=True):
+            segments.append(
+                {
+                    "speaker": self.labels.get(speaker),
+                    "start": segment.start,
+                    "stop": segment.end,
+                    "embeddings": np.empty((0, 192)),
+                }
+            )
+        return segments
+
     def clean_segments(self, diarization):
         speaker_time = collections.defaultdict(float)
         total_time = 0.0
@@ -81,22 +95,28 @@ class DiarizationPostProcessor:
 
         # filter out speakers that have spoken too little
         # (these are likely overlaps misclassified as separate speakers)
-        speakers = set([
-            speaker
-            for speaker, time in speaker_time.items()
-            if time > total_time * 0.01
-        ])
+        speakers = set(
+            [
+                speaker
+                for speaker, time in speaker_time.items()
+                if time > total_time * 0.01
+            ]
+        )
 
         segments = []
         for segment, _, speaker in diarization.itertracks(yield_label=True):
-            if (speaker not in speakers) or segment.duration < self.MIN_SEGMENT_DURATION:
+            if (
+                speaker not in speakers
+            ) or segment.duration < self.MIN_SEGMENT_DURATION:
                 continue
-            segments.append({
-                "speaker": self.labels.get(speaker),
-                "start": segment.start,
-                "stop": segment.end,
-                "embeddings": np.empty((0, 192)),
-            })
+            segments.append(
+                {
+                    "speaker": self.labels.get(speaker),
+                    "start": segment.start,
+                    "stop": segment.end,
+                    "embeddings": np.empty((0, 192)),
+                }
+            )
         return segments
 
     def merge_segments(self, clean_segments):
@@ -107,7 +127,10 @@ class DiarizationPostProcessor:
                 merged.append(segment)
                 continue
             if merged[-1]["speaker"] == segment["speaker"]:
-                if segment["start"] - merged[-1]["stop"] < 2.0 * self.MIN_SEGMENT_DURATION:
+                if (
+                    segment["start"] - merged[-1]["stop"]
+                    < 2.0 * self.MIN_SEGMENT_DURATION
+                ):
                     merged[-1]["stop"] = segment["stop"]
                     continue
             merged.append(segment)
@@ -115,7 +138,7 @@ class DiarizationPostProcessor:
 
     def segment_embeddings(self, merged_segments, embeddings):
         # process the embeddings
-        for i, chunk in enumerate(embeddings['data']):
+        for i, chunk in enumerate(embeddings["data"]):
             # chunk shape: (local_num_speakers, dimension)
             speakers = []
             for speaker_embedding in chunk:
@@ -128,14 +151,14 @@ class DiarizationPostProcessor:
             speaker = speakers[0]
 
             # find the segment that this chunk belongs to
-            chunk_start = i * embeddings['chunk_offset']
-            chunk_end = chunk_start + embeddings['chunk_duration']
+            chunk_start = i * embeddings["chunk_offset"]
+            chunk_end = chunk_start + embeddings["chunk_duration"]
 
             for segment in merged_segments:
-                if (segment['start'] <= chunk_start) and (chunk_end <= segment['stop']):
+                if (segment["start"] <= chunk_start) and (chunk_end <= segment["stop"]):
                     # this is the segment we're looking for
-                    segment['embeddings'] = np.append(
-                        segment['embeddings'],
+                    segment["embeddings"] = np.append(
+                        segment["embeddings"],
                         [speaker],
                         axis=0,
                     )
@@ -143,19 +166,19 @@ class DiarizationPostProcessor:
         return merged_segments
 
     def create_speaker_embeddings(self, emb_segments):
-        speaker_embeddings = collections.defaultdict(
-            lambda: np.empty((0, 192)))
+        speaker_embeddings = collections.defaultdict(lambda: np.empty((0, 192)))
 
         for segment in emb_segments:
             if segment["embeddings"].size == 0:
                 continue
-            speaker_embeddings[segment["speaker"]] = np.vstack([
-                speaker_embeddings[segment["speaker"]],
-                segment["embeddings"],
-            ])
+            speaker_embeddings[segment["speaker"]] = np.vstack(
+                [
+                    speaker_embeddings[segment["speaker"]],
+                    segment["embeddings"],
+                ]
+            )
         for speaker in speaker_embeddings:
-            speaker_embeddings[speaker] = speaker_embeddings[speaker].mean(
-                axis=0)
+            speaker_embeddings[speaker] = speaker_embeddings[speaker].mean(axis=0)
         return speaker_embeddings
 
     def format_segments(self, emb_segments):
@@ -164,11 +187,13 @@ class DiarizationPostProcessor:
 
         segments = []
         for segment in emb_segments:
-            segments.append({
-                "speaker": segment["speaker"],
-                "start": format_ts(segment["start"]),
-                "stop": format_ts(segment["stop"]),
-            })
+            segments.append(
+                {
+                    "speaker": segment["speaker"],
+                    "start": format_ts(segment["start"]),
+                    "stop": format_ts(segment["stop"]),
+                }
+            )
         return segments
 
     def format_segments_extra(self, emb_segments, speaker_embeddings):
@@ -192,10 +217,15 @@ class DiarizationPostProcessor:
         segments = []
         for segment in emb_segments:
             embedding = get_mean(segment["embeddings"])
-            segments.append({
-                "speaker": segment["speaker"],
-                "start": format_ts(segment["start"]),
-                "stop": format_ts(segment["stop"]),
-                "edist": dict((label, dist(embedding, label)) for label in self.labels.get_all()),
-            })
+            segments.append(
+                {
+                    "speaker": segment["speaker"],
+                    "start": format_ts(segment["start"]),
+                    "stop": format_ts(segment["stop"]),
+                    "edist": dict(
+                        (label, dist(embedding, label))
+                        for label in self.labels.get_all()
+                    ),
+                }
+            )
         return segments
