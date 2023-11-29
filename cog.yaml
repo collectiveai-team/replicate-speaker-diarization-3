@@ -1,23 +1,21 @@
 build:
   gpu: true
+  cuda: "11.8"
 
   system_packages:
     - 'ffmpeg'
     - 'libsndfile1'
 
-  python_version: '3.10'
+  python_version: '3.11'
 
   python_packages:
     - 'ffmpeg-python==0.2.0'
-    - 'torch==1.11.0'
-    - 'torchvision==0.12.0'
-    - 'torchaudio==0.11.0'
-    - 'pyannote.audio==2.1.1'
-    - 'pydantic<2.0.0'
+    - 'pyannote.audio==3.1.0'
+    - 'onnxruntime-gpu==1.16.3'
 
   run:
-    - 'wget -O - https://pyannote-speaker-diarization.s3.eu-west-2.amazonaws.com/data-2023-03-25-02.tar.gz | tar xz -C /'
+    - 'wget -O - https://storage.googleapis.com/collectiveai-ic-public-storage/speaker-diarizartion/pyannote-pipeline-3.0.tag.gz | tar xz -C /'
 
-image: 'r8.im/collectiveai-team/speaker-diarization'
+image: 'r8.im/collectiveai-team/speaker-diarization-3'
 
 predict: 'predict.py:Predictor'
