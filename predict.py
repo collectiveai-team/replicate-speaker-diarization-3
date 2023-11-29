@@ -8,6 +8,7 @@ from pyannote.audio.pipelines import SpeakerDiarization
 
 from lib.diarization import DiarizationPostProcessor
 from lib.audio import AudioPreProcessor
+import torch
 
 
 class SpeakerSegment(BaseModel):
@@ -31,23 +32,23 @@ class Predictor(BasePredictor):
     def setup(self):
         """Load the model into memory to make running multiple predictions efficient"""
         self.diarization = SpeakerDiarization(
-            segmentation="/data/pyannote/segmentation/pytorch_model.bin",
-            embedding="/data/speechbrain/spkrec-ecapa-voxceleb",
+            segmentation="/pyannote/segmentation-3.0/pytorch_model.bin",
+            embedding="/hbredin/wespeaker-voxceleb-resnet34-LM/speaker-embedding.onnx",
             clustering="AgglomerativeClustering",
             segmentation_batch_size=32,
-            embedding_batch_size=32,
+            embedding_batch_size=1,
             embedding_exclude_overlap=True,
         )
+        self.diarization.to(torch.device("cuda"))
         self.diarization.instantiate(
             {
                 "clustering": {
                     "method": "centroid",
-                    "min_cluster_size": 15,
-                    "threshold": 0.7153814381597874,
+                    "min_cluster_size": 12,
+                    "threshold": 0.7045654963945799,
                 },
                 "segmentation": {
-                    "min_duration_off": 0.5817029604921046,
-                    "threshold": 0.4442333667381752,
+                    "min_duration_off": 0.0,
                 },
             }
         )
@@ -63,11 +64,11 @@ class Predictor(BasePredictor):
 
         print("diarizing audio file...")
         diarization = self.diarization(self.audio_pre.output_path, hook=hook)
+        chunk_duration = self.diarization._segmentation.model.specifications.duration
         embeddings = {
             "data": closure["embeddings"],
-            "chunk_duration": self.diarization.segmentation_duration,
-            "chunk_offset": self.diarization.segmentation_step
-            * self.diarization.segmentation_duration,
+            "chunk_duration": chunk_duration,
+            "chunk_offset": self.diarization.segmentation_step * chunk_duration,
         }
         return self.diarization_post.process(diarization, embeddings)
 

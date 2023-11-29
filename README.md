@@ -47,8 +47,8 @@ The model outputs a single `output.json` file with the following structure:
       "B"
     ],
     "embeddings": {
-      "A": [<array of 192 floats>],
-      "B": [<array of 192 floats>]
+      "A": [<array of 256 floats>],
+      "B": [<array of 256 floats>]
     }
   }
 }

@@ -78,7 +78,7 @@ class DiarizationPostProcessor:
                     "speaker": self.labels.get(speaker),
                     "start": segment.start,
                     "stop": segment.end,
-                    "embeddings": np.empty((0, 192)),
+                    "embeddings": np.empty((0, 256)),
                 }
             )
         return segments
@@ -114,7 +114,7 @@ class DiarizationPostProcessor:
                     "speaker": self.labels.get(speaker),
                     "start": segment.start,
                     "stop": segment.end,
-                    "embeddings": np.empty((0, 192)),
+                    "embeddings": np.empty((0, 256)),
                 }
             )
         return segments
@@ -166,7 +166,7 @@ class DiarizationPostProcessor:
         return merged_segments
 
     def create_speaker_embeddings(self, emb_segments):
-        speaker_embeddings = collections.defaultdict(lambda: np.empty((0, 192)))
+        speaker_embeddings = collections.defaultdict(lambda: np.empty((0, 256)))
 
         for segment in emb_segments:
             if segment["embeddings"].size == 0:
