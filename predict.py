@@ -7,6 +7,7 @@ import torch
 import torchaudio
 from cog import Path, Input, BaseModel, BasePredictor
 from pyannote.audio.pipelines import SpeakerDiarization
+from pyannote.audio.pipelines.utils.hook import ProgressHook
 
 from lib.audio import AudioPreProcessor
 from lib.diarization import DiarizationPostProcessor
@@ -65,21 +66,24 @@ class Predictor(BasePredictor):
         self.audio_pre = AudioPreProcessor()
 
     def run_diarization(self):
-        closure = {"embeddings": None}
-
-        def hook(name, *args, **kwargs):
-            if name == "embeddings" and len(args) > 0:
-                closure["embeddings"] = args[0]
 
         print("starting diarizing...")
         print("> loading audio file")
         waveform, sample_rate = torchaudio.load(self.audio_pre.output_path)
 
         print("> diarizing audio file")
-        diarization = self.diarization(
-            {"waveform": waveform, "sample_rate": sample_rate},
-            hook=hook,
-        )
+        with ProgressHook() as progress_hook:
+            closure = {"embeddings": None}
+
+            def hook(name, *args, **kwargs):
+                if name == "embeddings" and len(args) > 0:
+                    closure["embeddings"] = args[0]
+                progress_hook(name, *args, **kwargs)
+
+            diarization = self.diarization(
+                {"waveform": waveform, "sample_rate": sample_rate},
+                hook=hook,
+            )
         chunk_duration = self.diarization._segmentation.model.specifications.duration
         embeddings = {
             "data": closure["embeddings"],
