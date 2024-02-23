@@ -3,12 +3,13 @@ download model weights to /data
 wget wget -O - https://pyannote-speaker-diarization.s3.eu-west-2.amazonaws.com/data-2023-03-25-02.tar.gz | tar xz -C /
 """
 
-from cog import BasePredictor, Input, Path, BaseModel
+import torch
+import torchaudio
+from cog import Path, Input, BaseModel, BasePredictor
 from pyannote.audio.pipelines import SpeakerDiarization
 
-from lib.diarization import DiarizationPostProcessor
 from lib.audio import AudioPreProcessor
-import torch
+from lib.diarization import DiarizationPostProcessor
 
 
 class SpeakerSegment(BaseModel):
@@ -23,7 +24,7 @@ class Speakers(BaseModel):
     embeddings: dict[str, list[float]]
 
 
-class ModelOutput(BaseModel):
+class Output(BaseModel):
     segments: list[SpeakerSegment]
     speakers: Speakers
 
@@ -31,6 +32,14 @@ class ModelOutput(BaseModel):
 class Predictor(BasePredictor):
     def setup(self):
         """Load the model into memory to make running multiple predictions efficient"""
+
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")
+            print("running in gpu")
+        else:
+            self.device = torch.device("cpu")
+            print("running in cpu")
+
         self.diarization = SpeakerDiarization(
             segmentation="/pyannote/segmentation-3.0/pytorch_model.bin",
             embedding="/hbredin/wespeaker-voxceleb-resnet34-LM/speaker-embedding.onnx",
@@ -62,8 +71,15 @@ class Predictor(BasePredictor):
             if name == "embeddings" and len(args) > 0:
                 closure["embeddings"] = args[0]
 
-        print("diarizing audio file...")
-        diarization = self.diarization(self.audio_pre.output_path, hook=hook)
+        print("starting diarizing...")
+        print("> loading audio file")
+        waveform, sample_rate = torchaudio.load(self.audio_pre.output_path)
+
+        print("> diarizing audio file")
+        diarization = self.diarization(
+            {"waveform": waveform, "sample_rate": sample_rate},
+            hook=hook,
+        )
         chunk_duration = self.diarization._segmentation.model.specifications.duration
         embeddings = {
             "data": closure["embeddings"],
@@ -78,9 +94,10 @@ class Predictor(BasePredictor):
             description="Audio file or url",
             default="https://replicate.delivery/pbxt/IZjTvet2ZGiyiYaMEEPrzn0xY1UDNsh0NfcO9qeTlpwCo7ig/lex-levin-4min.mp3",
         ),
-    ) -> ModelOutput:
+    ) -> Output:
         """Run a single prediction on the model"""
 
+        print(">> received audio file:", audio)
         self.audio_pre.process(audio)
 
         if self.audio_pre.error:
@@ -91,4 +108,4 @@ class Predictor(BasePredictor):
 
         self.audio_pre.cleanup()
 
-        return ModelOutput(**result)
+        return Output(**result)
