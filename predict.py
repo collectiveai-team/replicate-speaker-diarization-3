@@ -65,7 +65,12 @@ class Predictor(BasePredictor):
         self.diarization_post = DiarizationPostProcessor()
         self.audio_pre = AudioPreProcessor()
 
-    def run_diarization(self):
+    def run_diarization(
+        self,
+        num_speakers: int | None = None,
+        min_speakers: int | None = None,
+        max_speakers: int | None = None,
+    ):
 
         print("starting diarizing...")
         print("> loading audio file")
@@ -82,6 +87,9 @@ class Predictor(BasePredictor):
 
             diarization = self.diarization(
                 {"waveform": waveform, "sample_rate": sample_rate},
+                num_speakers=num_speakers,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
                 hook=hook,
             )
         chunk_duration = self.diarization._segmentation.model.specifications.duration
@@ -98,6 +106,21 @@ class Predictor(BasePredictor):
             description="Audio file or url",
             default="https://replicate.delivery/pbxt/IZjTvet2ZGiyiYaMEEPrzn0xY1UDNsh0NfcO9qeTlpwCo7ig/lex-levin-4min.mp3",
         ),
+        num_speakers: int = Input(
+            description="Number of speakers to diarize. Default: infer",
+            default=None,
+            ge=1,
+        ),
+        min_speakers: int = Input(
+            description="Minimum number of speakers to diarize. Default: None",
+            default=None,
+            ge=1,
+        ),
+        max_speakers: int = Input(
+            description="Maximum number of speakers to diarize. Default: None",
+            default=None,
+            ge=1,
+        ),
     ) -> Output:
         """Run a single prediction on the model"""
 
@@ -108,7 +131,11 @@ class Predictor(BasePredictor):
             print(self.audio_pre.error)
             result = self.diarization_post.empty_result()
         else:
-            result = self.run_diarization()
+            result = self.run_diarization(
+                num_speakers=num_speakers,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+            )
 
         self.audio_pre.cleanup()
 
