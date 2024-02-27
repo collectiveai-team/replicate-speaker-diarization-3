@@ -10,11 +10,12 @@ build:
 
   python_packages:
     - 'ffmpeg-python==0.2.0'
-    - 'pyannote.audio==3.1.0'
+    - 'pyannote.audio==3.1.1'
     - 'onnxruntime-gpu==1.16.3'
+    - 'torch'
 
   run:
-    - 'wget -O - https://storage.googleapis.com/collectiveai-ic-public-storage/speaker-diarizartion/pyannote-pipeline-3.0.tag.gz | tar xz -C /'
+    - 'wget -O - https://collectiveai-public.s3.amazonaws.com/replicate-speaker-diarization/pyannote-pipeline-3.0.tar.gz | tar xz -C /'
 
 image: 'r8.im/collectiveai-team/speaker-diarization-3'
 

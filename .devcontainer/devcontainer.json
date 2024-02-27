@@ -1,0 +1,65 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.183.0/containers/python-3
+{
+	"name": "replicate-speaker-diarization",
+	// "initializeCommand": "make core-build",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "devcontainer",
+	"runServices": [
+		"devcontainer"
+	],
+	"workspaceFolder": "/workspace",
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.languageServer": "Pylance",
+				"editor.formatOnSave": true,
+				"[python]": {
+					"editor.defaultFormatter": "ms-python.black-formatter",
+					"editor.formatOnSave": true,
+					"editor.codeActionsOnSave": {
+						"source.organizeImports": true
+					},
+					"ruff.organizeImports": false
+				},
+				"black-formatter.args": [
+					"--line-length",
+					"88"
+				],
+				"isort.args": [
+					"--profile",
+					"black",
+					"--length-sort",
+					"--combine-as",
+					"--force-sort-within-sections"
+				],
+				"files.trimFinalNewlines": true,
+				"files.trimTrailingWhitespace": true,
+				"files.watcherExclude": {
+					"**/.git/objects/**": true,
+					"**/.git/subtree-cache/**": true
+				}
+			},
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+				"ms-python.python",
+				"magicstack.magicpython",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"eamodio.gitlens",
+				"GitHub.copilot",
+				"GitHub.copilot-labs",
+				"charliermarsh.ruff",
+				"ms-toolsai.jupyter"
+			]
+		}
+	},
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "bash /home/vscode/entrypoint.sh",
+	"overrideCommand": false,
+}

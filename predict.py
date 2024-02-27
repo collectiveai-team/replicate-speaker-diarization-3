@@ -3,12 +3,14 @@ download model weights to /data
 wget wget -O - https://pyannote-speaker-diarization.s3.eu-west-2.amazonaws.com/data-2023-03-25-02.tar.gz | tar xz -C /
 """
 
-from cog import BasePredictor, Input, Path, BaseModel
-from pyannote.audio.pipelines import SpeakerDiarization
-
-from lib.diarization import DiarizationPostProcessor
-from lib.audio import AudioPreProcessor
 import torch
+import torchaudio
+from cog import Path, Input, BaseModel, BasePredictor
+from pyannote.audio.pipelines import SpeakerDiarization
+from pyannote.audio.pipelines.utils.hook import ProgressHook
+
+from lib.audio import AudioPreProcessor
+from lib.diarization import DiarizationPostProcessor
 
 
 class SpeakerSegment(BaseModel):
@@ -23,7 +25,7 @@ class Speakers(BaseModel):
     embeddings: dict[str, list[float]]
 
 
-class ModelOutput(BaseModel):
+class Output(BaseModel):
     segments: list[SpeakerSegment]
     speakers: Speakers
 
@@ -31,6 +33,14 @@ class ModelOutput(BaseModel):
 class Predictor(BasePredictor):
     def setup(self):
         """Load the model into memory to make running multiple predictions efficient"""
+
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")
+            print("running in gpu")
+        else:
+            self.device = torch.device("cpu")
+            print("running in cpu")
+
         self.diarization = SpeakerDiarization(
             segmentation="/pyannote/segmentation-3.0/pytorch_model.bin",
             embedding="/hbredin/wespeaker-voxceleb-resnet34-LM/speaker-embedding.onnx",
@@ -55,15 +65,33 @@ class Predictor(BasePredictor):
         self.diarization_post = DiarizationPostProcessor()
         self.audio_pre = AudioPreProcessor()
 
-    def run_diarization(self):
-        closure = {"embeddings": None}
+    def run_diarization(
+        self,
+        num_speakers: int | None = None,
+        min_speakers: int | None = None,
+        max_speakers: int | None = None,
+    ):
 
-        def hook(name, *args, **kwargs):
-            if name == "embeddings" and len(args) > 0:
-                closure["embeddings"] = args[0]
+        print("starting diarizing...")
+        print("> loading audio file")
+        waveform, sample_rate = torchaudio.load(self.audio_pre.output_path)
 
-        print("diarizing audio file...")
-        diarization = self.diarization(self.audio_pre.output_path, hook=hook)
+        print("> diarizing audio file")
+        with ProgressHook() as progress_hook:
+            closure = {"embeddings": None}
+
+            def hook(name, *args, **kwargs):
+                if name == "embeddings" and len(args) > 0:
+                    closure["embeddings"] = args[0]
+                progress_hook(name, *args, **kwargs)
+
+            diarization = self.diarization(
+                {"waveform": waveform, "sample_rate": sample_rate},
+                num_speakers=num_speakers,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+                hook=hook,
+            )
         chunk_duration = self.diarization._segmentation.model.specifications.duration
         embeddings = {
             "data": closure["embeddings"],
@@ -78,17 +106,37 @@ class Predictor(BasePredictor):
             description="Audio file or url",
             default="https://replicate.delivery/pbxt/IZjTvet2ZGiyiYaMEEPrzn0xY1UDNsh0NfcO9qeTlpwCo7ig/lex-levin-4min.mp3",
         ),
-    ) -> ModelOutput:
+        num_speakers: int = Input(
+            description="Number of speakers to diarize. Default: infer",
+            default=None,
+            ge=1,
+        ),
+        min_speakers: int = Input(
+            description="Minimum number of speakers to diarize. Default: None",
+            default=None,
+            ge=1,
+        ),
+        max_speakers: int = Input(
+            description="Maximum number of speakers to diarize. Default: None",
+            default=None,
+            ge=1,
+        ),
+    ) -> Output:
         """Run a single prediction on the model"""
 
+        print(">> received audio file:", audio)
         self.audio_pre.process(audio)
 
         if self.audio_pre.error:
             print(self.audio_pre.error)
             result = self.diarization_post.empty_result()
         else:
-            result = self.run_diarization()
+            result = self.run_diarization(
+                num_speakers=num_speakers,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+            )
 
         self.audio_pre.cleanup()
 
-        return ModelOutput(**result)
+        return Output(**result)
